@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.1" halcon_version="13.0">
+<procedure name="main">
+<interface/>
+<body>
+<c>*picture 角度+0.785398</c>
+<c>*picture0反转过后角度-0.785398</c>
+<l>dev_close_window()</l>
+<l>dev_open_window(0, 0, 960, 540, 'black', WindowHandle)</l>
+<l>read_image(Image, 'D:/机器视觉/image.jpg')</l>
+<c>**找边缘</c>
+<l>edges_sub_pix(Image, Edges, 'canny', 2,20, 40)</l>
+<c>**填充</c>
+<l>gen_region_contour_xld (Edges, Region, 'filled')</l>
+<c>**all:所有圆*根据颜色特征找出圆</c>
+<l>select_shape (Region, all, 'area', 'and', 0, 50000)</l>
+<c>*根据颜色，找出内圆，并找到圆心</c>
+<l>select_shape (Region, inner, 'area', 'and', 4000, 40000)</l>
+<c>**外接圆的位置以及半径</c>
+<l>smallest_circle(inner, InnerRow, InnerColumn, InnerRadius)</l>
+<c>*转换格式，变成Image</c>
+<l>region_to_bin(all, AllBinImage, 255, 0, 960, 540)</l>
+<c>*用全局阈值分割图像。*图像分割</c>
+<l>threshold (AllBinImage, all, 255, 255)</l>
+<c></c>
+<l>dev_clear_window()</l>
+<c>*把目标以外的内容删除</c>
+<l>reduce_domain(Image, all, AllReduced)</l>
+<l>*select_shape (Region, part, 'area', 'and', 0, 32544)</l>
+<l>region_to_bin(inner, innerBinImage, 255, 0, 960, 540)</l>
+<c>*减去两个图像-&gt;得到圆环ImageSub（一个同心圆）</c>
+<l>sub_image(AllBinImage,innerBinImage, ImageSub, 1, 128)</l>
+<c></c>
+<l>threshold (ImageSub, Regions, 255, 255)</l>
+<c>*得到大圆的半径</c>
+<l>smallest_circle(all, Row, Column, Radius)</l>
+<c>*圆心Row ，Column，ROI_0代表最小外接圆Region</c>
+<l>gen_circle (ROI_0, Row, Column, Radius)</l>
+<c>*Image代表带缺口的目标原图，ROI_0代表最小外接圆</c>
+<l>reduce_domain(Image,ROI_0, ImageReduced)</l>
+<c>*也许不太有意义</c>
+<l>region_to_bin(ROI_0,BinImage, 255, 0, 960, 540)</l>
+<c>*ImageSub1代表缺口和干扰</c>
+<l>sub_image(BinImage, AllBinImage, ImageSub1, 255, 128)</l>
+<c>*Image变区域</c>
+<l>threshold (ImageSub1, Regions1, 0, 0)</l>
+<c>*腐蚀算法，为了去除干扰，RegionErosion就是缺口</c>
+<l>erosion_circle(Regions1, RegionErosion, 1.5)</l>
+<l>dev_clear_window()</l>
+<c>*显示当前图形窗口中的图像对象。</c>
+<l>dev_display(RegionErosion)</l>
+<l>dev_display(inner)</l>
+<c>*最小的周围矩形与任何方向。</c>
+<l>smallest_rectangle2(RegionErosion,Row1, Column1, Phi, Length1, Length2)</l>
+<c>*缺口中心Row1，Column1</c>
+<c>*integer centRow=(Row1+Row2)/2</c>
+<c>*integer centCol=(Column1+Column2)/2</c>
+<c>*Circle是新生成的包含待识别区域的region</c>
+<l>gen_circle(Circle,(Row1+InnerRow)/2, (Column1+InnerColumn)/2, (Radius-InnerRadius))</l>
+<c>*960 540 是可以修改的</c>
+<l>region_to_bin(Circle, BinImage1, 255, 0, 960, 540)</l>
+<c>*RegionDilation膨胀后的区域，作者希望能够让内圆边缘接近待识别区域！！！！！20的大小 目前决定了准确率</c>
+<l>dilation_circle(inner, RegionDilation, 20)</l>
+<l>region_to_bin(RegionDilation, BinImage2, 255, 0, 960, 540)</l>
+<c>*</c>
+<l>sub_image(BinImage1,BinImage2,ImageSub2, 1, 128)</l>
+<c>*Regions2为待识别区域</c>
+<l>threshold (ImageSub2, Regions2, 255, 255)</l>
+<c>*侵蚀   Regions2:相减后得到的左上角的月牙图形</c>
+<l>erosion_circle(Regions2, RegionErosion1, 2)</l>
+<c></c>
+<c>*外接矩形</c>
+<l>smallest_rectangle2(RegionErosion1, Row2, Column2, Phi1, Length11, Length21)</l>
+<l>gen_rectangle2(Rectangle, Row2, Column2, Phi1, Length11, Length21)</l>
+<c>*类似相减</c>
+<l>reduce_domain(AllBinImage, Rectangle, ImageReduced1)</l>
+<c>*也许可以删除  **好像确实可以删除</c>
+<l>threshold (ImageReduced1, Regions3, 100, 255)</l>
+<l>dev_clear_window()</l>
+<l>region_to_bin(Regions3, BinImage3, 255, 0, 960, 540)</l>
+<c>*用待识别区域image减去 膨胀以后的内圆</c>
+<l>sub_image(BinImage3,BinImage2,ImageSub3, 10, 100)</l>
+<c>*根据ImageSub3生成Regions4</c>
+<l>threshold (ImageSub3, Regions4, 255, 255)</l>
+<c></c>
+<l>dev_clear_window()</l>
+<l>reduce_domain(Image, Regions4, ImageReduced2)</l>
+<c>*reduce_domain(Image, Image-Regions4, ImageReduced2)</c>
+<l>threshold(ImageSub3,Region1, 0, 254)</l>
+<l>dev_clear_window()</l>
+<c>*what is it</c>
+<l>reduce_domain(Image,Region1,ImageReduced3)</l>
+<c>*第12象限</c>
+<l>if (Row&gt;Row1)</l>
+<l>    dev_disp_text(-Phi, 'window', Row2, Column2, 'black', [], [])</l>
+<c> </c>
+<l>elseif(Column&gt;Column1)</l>
+<c>    *第三象限</c>
+<l>    dev_disp_text(-(3.1415+Phi), 'window', Row2, Column2, 'black', [], [])</l>
+<c></c>
+<l>else    </l>
+<c>    *第四象限</c>
+<l>     dev_disp_text(3.1415-Phi, 'window', Row2, Column2, 'black', [], [])</l>
+<l>endif</l>
+<l>* inner_circle(RegionErosion1, Row2, Column2, Radius1)</l>
+<l>*gen_circle(Circle1, Row2, Column2, Radius1)</l>
+<l>*dev_display(Image)</l>
+<l>*gen_rectangle2(Rectangle, Row2, Column2, Phi, Radius1*2, Radius1)</l>
+<l>*dev_clear_window()</l>
+<l>*reduce_domain(Image,Rectangle, ImageReduced1)</l>
+<l>*dev_clear_window()</l>
+<l>*gen_rectangle2(Rectangle, Row2, Column2, 1.5707, Length11, Length21)</l>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>
